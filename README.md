@@ -5,6 +5,7 @@
 
 ## 🎯 Objectif du projet
 Ce projet démontre la mise en place d'un pipeline de traitement de données à l'échelle ("production-grade" et reproductible) utilisant Apache Spark. L'objectif est d'analyser un volume massif de données (environ 10 Go de logs de trajets) provenant du système de vélos en libre-service Citi Bike de New York.
+Ce projet vise à analyser les flux de vélos en libre-service à New York (Citi Bike) et à modéliser la demande en croisant ces données avec l'historique météorologique de la NOAA.
 
 ## Dataset
 
@@ -16,16 +17,14 @@ Le pipeline est divisé en deux phases distinctes pour respecter les bonnes prat
 1. **Phase d'Ingestion & Stockage (CSV vers Parquet) :**
 
 2. **Phase d'Analyse (Spark SQL & DataFrames) :**
-  
-## Structure du dépôt
-```text
-citibike-spark-pipeline/
-├── data/
-│   ├── raw/             <- (Ignoré par Git) Fichiers CSV bruts de Citi Bike
-│   └── processed/       <- (Ignoré par Git) Données converties au format Parquet
-├── src/
-│   ├── 01_ingestion.py  <- Job Spark d'ingestion et conversion
-│   └── 02_analytics.py  <- Job Spark d'analyse (DataFrames)
-├── .gitignore           <- Configuration Git (exclut le dossier data/)
-├── requirements.txt     <- Dépendances Python
-└── README.md            <- Documentation du projet
+
+## 🗄️ Sources des données (AWS S3 Publics)
+- **Citi Bike Trips :** `s3://tripdata/`
+- **Météo NOAA :** `s3://noaa-gsod-pds/`
+- **Format cible :** Apache Parquet pour des performances optimales.
+
+## ⚙️ Installation
+1. Cloner le dépôt.
+2. Créer un environnement virtuel.
+3. Installer les dépendances : `pip install -r requirements.txt`.
+4. Créer un fichier `.env` à la racine pour les variables d'environnement.

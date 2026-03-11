@@ -1,1 +1,22 @@
+# Environnements virtuels
+venv/
+env/
+.env
+
+# Fichiers de données (très important)
 data/
+*.csv
+*.parquet
+*.json
+*.zip
+
+# Fichiers Jupyter Notebook
+.ipynb_checkpoints/
+
+# Fichiers de cache Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+*.log
