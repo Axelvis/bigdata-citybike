@@ -1,9 +1,20 @@
-pyarrow
-boto3
+# --- Ingestion et Cloud ---
 s3fs
+boto3
 python-dotenv
+
+# --- Traitement Big Data ---
+pyspark
+pandas
+pyarrow
+
+# --- Environnement de développement ---
 jupyterlab
+
+# --- Visualisation (EDA) ---
 matplotlib
 seaborn
+
+# --- Machine Learning ---
 scikit-learn
 tpot
