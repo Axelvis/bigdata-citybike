@@ -6,6 +6,10 @@
 ## 🎯 Objectif du projet
 Ce projet démontre la mise en place d'un pipeline de traitement de données à l'échelle ("production-grade" et reproductible) utilisant Apache Spark. L'objectif est d'analyser un volume massif de données (environ 10 Go de logs de trajets) provenant du système de vélos en libre-service Citi Bike de New York.
 
+## Dataset
+
+https://s3.amazonaws.com/tripdata/index.html
+
 ## 🏗️ Architecture et Concepts Big Data
 Le pipeline est divisé en deux phases distinctes pour respecter les bonnes pratiques vues en cours :
 
