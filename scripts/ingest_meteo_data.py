@@ -17,8 +17,8 @@ print("-" * 50)
 # ---------------------------------------------------------
 # 1. CONFIGURATION DES DOSSIERS ET PARAMÈTRES
 # ---------------------------------------------------------
-dossier_temp = '../data/temp_meteo'
-dossier_final = '../data/meteo_db'
+dossier_temp = 'data/temp_meteo'
+dossier_final = 'data/meteo_db'
 
 if os.path.exists(dossier_temp):
     shutil.rmtree(dossier_temp)
