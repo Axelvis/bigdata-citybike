@@ -61,7 +61,7 @@ df_final = df_final.drop("date_meteo")
 # ---------------------------------------------------------
 # 5. SAUVEGARDE FINALE
 # ---------------------------------------------------------
-dossier_sortie = "../data/dataset_final_modelisation"
+dossier_sortie = "data/dataset_final_modelisation"
 print(f"💾 Sauvegarde du jeu de données unifié dans {dossier_sortie}...")
 
 df_final.write.mode("overwrite").parquet(dossier_sortie)
