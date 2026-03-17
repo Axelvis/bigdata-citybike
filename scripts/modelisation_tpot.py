@@ -55,7 +55,7 @@ tpot = TPOTRegressor(
     population_size=20, 
     verbose=2, 
     random_state=42, 
-    n_jobs=-1 # Utilise tous les cœurs de votre processeur
+    n_jobs=1 # Utilise tous les cœurs de votre processeur
 )
 
 tpot.fit(X_train, y_train)
