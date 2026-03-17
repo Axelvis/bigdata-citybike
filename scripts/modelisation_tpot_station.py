@@ -15,7 +15,7 @@ spark = SparkSession.builder \
 # ---------------------------------------------------------
 print("Lecture de la base de donnees unifiee...")
 # Lecture optimisee grace au format Parquet en colonnes[cite: 374].
-df_final = spark.read.parquet("../data/dataset_final_modelisation")
+df_final = spark.read.parquet("data/dataset_final_modelisation")
 
 # Nettoyage des lignes sans station de depart
 df_clean = df_final.dropna(subset=["start_station_name"])
