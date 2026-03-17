@@ -18,13 +18,16 @@ print("-" * 50)
 # ---------------------------------------------------------
 # 1. CONFIGURATION DES DOSSIERS
 # ---------------------------------------------------------
-dossier_temp = '../data/temp_csv'      # Le "sas" de décompression
-dossier_final = '../data/citibike_db'  # La base de données finale
+# CRITIQUE : On sépare physiquement le ZIP des CSV pour ne pas perturber Spark
+dossier_zip = '../data/temp_zip'       # Accueil du fichier téléchargé
+dossier_csv = '../data/temp_csv'       # Accueil des fichiers décompressés
+dossier_final = '../data/citibike_db'  # Base de données finale
 
-# On s'assure de partir sur un dossier temporaire totalement vide
-if os.path.exists(dossier_temp):
-    shutil.rmtree(dossier_temp)
-os.makedirs(dossier_temp, exist_ok=True)
+# Nettoyage et création des dossiers
+for d in [dossier_zip, dossier_csv]:
+    if os.path.exists(d):
+        shutil.rmtree(d)
+    os.makedirs(d, exist_ok=True)
 os.makedirs(dossier_final, exist_ok=True)
 
 # ---------------------------------------------------------
@@ -40,45 +43,37 @@ print("-" * 50)
 # ---------------------------------------------------------
 # 3. LA BOUCLE GLOBALE (Pipeline)
 # ---------------------------------------------------------
-# On boucle sur la totalité des fichiers sans aucune limite
 for index, fichier_zip in enumerate(fichiers_zip, start=1):
     nom_zip = fichier_zip.split('/')[-1]
-    chemin_zip_local = os.path.join(dossier_temp, nom_zip)
+    chemin_zip_local = os.path.join(dossier_zip, nom_zip)
     
     print(f"[{index}/{total_fichiers}] ⬇️ Téléchargement de {nom_zip}...")
-    
-    # 1. Téléchargement rapide d'un seul bloc
     fs.get(fichier_zip, chemin_zip_local)
     
     print(f"[{index}/{total_fichiers}] 📦 Décompression locale...")
-    
-    # 2. Extraction des CSV
     with zipfile.ZipFile(chemin_zip_local, 'r') as z:
         vrais_csv = [
             nom for nom in z.namelist() 
             if nom.endswith('.csv') and not nom.startswith('__MACOSX') and not nom.split('/')[-1].startswith('._')
         ]
         for csv_file in vrais_csv:
-            z.extract(csv_file, dossier_temp)
+            # On extrait uniquement dans le dossier réservé aux CSV
+            z.extract(csv_file, dossier_csv)
             
     print(f"[{index}/{total_fichiers}] ⚡ Traitement PySpark...")
-    
-    # 3. Lecture PySpark 
-    # recursiveFileLookup=true permet de trouver les CSV même s'ils sont dans des sous-dossiers du ZIP
+    # Spark ne scannera QUE les fichiers texte de ce dossier
     df_spark = spark.read.option("recursiveFileLookup", "true") \
-                         .csv(dossier_temp, header=True, inferSchema=True)
+                         .csv(dossier_csv, header=True, inferSchema=True)
     
-    # 4. Ajout à la base Parquet
-    # L'option mergeSchema=true est ajoutée en sécurité au cas où Citi Bike aurait 
-    # rajouté ou modifié des colonnes entre 2013 et 2024.
     df_spark.write.mode("append").option("mergeSchema", "true").parquet(dossier_final)
     
     print(f"[{index}/{total_fichiers}] 🧹 Nettoyage du disque...")
-    
-    # 5. Destruction totale du contenu du dossier temporaire (ZIP + CSV)
-    shutil.rmtree(dossier_temp)
-    os.makedirs(dossier_temp, exist_ok=True)
+    # On vide les sas pour faire place nette à la prochaine archive
+    shutil.rmtree(dossier_zip)
+    shutil.rmtree(dossier_csv)
+    os.makedirs(dossier_zip, exist_ok=True)
+    os.makedirs(dossier_csv, exist_ok=True)
     
     print(f"✅ Fichier {nom_zip} sécurisé en Parquet !\n")
 
-print("🎉 PIPELINE GLOBAL TERMINÉ ! Toutes vos données sont prêtes.")
+print("🎉 PIPELINE GLOBAL VÉLOS TERMINÉ ! Toutes vos données sont prêtes.")
