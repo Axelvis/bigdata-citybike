@@ -53,7 +53,7 @@ print("⚠️ Cela peut prendre plusieurs minutes. Laissez l'IA travailler !")
 tpot = TPOTRegressor(
     generations=5, 
     population_size=20, 
-    verbosity=2, 
+    verbose=2, 
     random_state=42, 
     n_jobs=-1 # Utilise tous les cœurs de votre processeur
 )
