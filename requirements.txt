@@ -2,6 +2,7 @@
 s3fs
 boto3
 python-dotenv
+meteostat
 
 # --- Traitement Big Data ---
 pyspark
