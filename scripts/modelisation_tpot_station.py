@@ -1,4 +1,5 @@
 import pandas as pd
+import joblib
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import count, month, dayofweek, col
 from tpot import TPOTRegressor
@@ -75,7 +76,7 @@ if __name__ == '__main__':
         population_size=20, 
         verbose=2, 
         random_state=42, 
-        n_jobs=1
+        n_jobs=6
     )
 
     tpot.fit(X_train, y_train)
@@ -83,17 +84,20 @@ if __name__ == '__main__':
     # ---------------------------------------------------------
     # 4. EVALUATION ET EXPORT
     # ---------------------------------------------------------
-    print("\nEntrainement termine !")
+
+    print("\n✅ Entrainement termine !")
 
     predictions = tpot.predict(X_test)
     score_r2 = r2_score(y_test, predictions)
 
     print("-" * 50)
-    print(f"Score R2 du modele de prediction par station : {score_r2:.2f}")
+    print(f"🎯 Score R2 du modele par station : {score_r2:.2f}")
     print("-" * 50)
 
-    fichier_export = "src/modele_stations_pipeline.py"
-    tpot.export(fichier_export)
-    print(f"Code source du meilleur modele sauvegarde dans : {fichier_export}")
+    # SAUVEGARDE CORRIGÉE POUR NE PAS CRASHER À LA FIN
+    fichier_modele = "data/modele_stations_tpot.pkl"
+    joblib.dump(tpot.fitted_pipeline_, fichier_modele)
+    
+    print(f"💾 Modele complet sauvegarde dans : {fichier_modele}")
 
     spark.stop()
