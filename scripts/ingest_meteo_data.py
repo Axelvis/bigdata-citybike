@@ -1,9 +1,13 @@
 import pandas as pd
 from datetime import datetime
-from meteostat import Point, hourly
+# --- CORRECTION : Ajout de l'import 'config' ---
+from meteostat import Point, hourly, config
 import os
 
 print("🌤️  Démarrage du téléchargement de la météo horaire...")
+
+# --- CORRECTION : Désactivation de la sécurité anti-surcharge ---
+config.block_large_requests = False
 
 # 1. PARAMÉTRAGES
 # Coordonnées géographiques de Central Park, New York
@@ -26,21 +30,16 @@ print("🧹 Nettoyage des données...")
 df_meteo = df_meteo.reset_index()
 
 # On ne garde que les colonnes qui nous intéressent vraiment
-# time: Date et Heure
-# temp: Température en °Celsius !
-# prcp: Précipitations en millimètres
-# wspd: Vitesse du vent en km/h
 df_meteo_propre = df_meteo[['time', 'temp', 'prcp', 'wspd']].copy()
 
-# On sépare la date et l'heure dans deux colonnes distinctes pour faciliter 
-# la future jointure avec les trajets de vélos
+# On sépare la date et l'heure dans deux colonnes distinctes
 df_meteo_propre['date_meteo'] = df_meteo_propre['time'].dt.date
 df_meteo_propre['heure_meteo'] = df_meteo_propre['time'].dt.hour
 
-# Remplacer les éventuelles valeurs manquantes (NaN) par des zéros pour la pluie et le vent
+# Remplacer les éventuelles valeurs manquantes
 df_meteo_propre['prcp'] = df_meteo_propre['prcp'].fillna(0.0)
 df_meteo_propre['wspd'] = df_meteo_propre['wspd'].fillna(0.0)
-# Pour la température, on propage la température de l'heure précédente s'il y a un trou
+# Pour la température, on propage la dernière valeur connue s'il y a un trou
 df_meteo_propre['temp'] = df_meteo_propre['temp'].ffill()
 
 # 4. SAUVEGARDE EN PARQUET
