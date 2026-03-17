@@ -1,9 +1,11 @@
 import pandas as pd
+import joblib
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import count, month, dayofweek
 from tpot import TPOTRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
+
 
 # ---------------------------------------------------------
 # SÉCURITÉ MULTIPROCESSING (Le garde du corps)
@@ -52,7 +54,7 @@ if __name__ == '__main__':
 
     tpot.fit(X_train, y_train)
 
-    # 4. RÉSULTATS ET EXPORTATION
+# 4. RÉSULTATS ET EXPORTATION
     print("\n✅ Entraînement terminé !")
 
     predictions = tpot.predict(X_test)
@@ -62,6 +64,13 @@ if __name__ == '__main__':
     print(f"🎯 Score R² du meilleur modèle : {score_r2:.2f}")
     print("-" * 50)
 
-    fichier_export = "src/meilleur_modele_pipeline.py"
-    tpot.export(fichier_export)
-    print(f"💾 Le code source du meilleur pipeline a été sauvegardé dans : {fichier_export}")
+    # 1. Afficher l'algorithme gagnant dans le terminal
+    print("\n🏆 Algorithme sélectionné par l'IA :")
+    print(tpot.fitted_pipeline_)
+
+    # 2. Sauvegarder le modèle prêt à l'emploi
+    fichier_modele = "data/modele_citibike_tpot.pkl"
+    joblib.dump(tpot.fitted_pipeline_, fichier_modele)
+    
+    print(f"\n💾 Le modèle entraîné a été sauvegardé dans : {fichier_modele}")
+    print("Vous pourrez le recharger plus tard avec joblib.load() sans avoir à le ré-entraîner !")
