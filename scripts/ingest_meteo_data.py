@@ -1,45 +1,53 @@
 import pandas as pd
 from datetime import datetime
-# --- CORRECTION : Ajout de l'import 'config' ---
-from meteostat import Point, hourly, config
+from meteostat import hourly
 import os
 
 print("🌤️  Démarrage du téléchargement de la météo horaire...")
 
-# --- CORRECTION : Désactivation de la sécurité anti-surcharge ---
-config.block_large_requests = False
-
 # 1. PARAMÉTRAGES
-# Coordonnées géographiques de Central Park, New York
-ny_central_park = Point(40.7831, -73.9712)
+# Identifiant officiel de la station de Central Park (New York)
+station_id = '72505'
+annees = range(2013, 2025) # De 2013 à 2024 inclus
 
-# Période globale du projet (De l'ouverture de Citi Bike à fin 2024)
-date_debut = datetime(2013, 1, 1)
-date_fin = datetime(2024, 12, 31, 23, 59)
+liste_df = []
 
-# 2. TÉLÉCHARGEMENT DES DONNÉES
-print(f"⏳ Interrogation des serveurs climatiques de {date_debut.year} à {date_fin.year}...")
-# On récupère les données horaires
-donnees_meteo = hourly(ny_central_park, date_debut, date_fin)
-df_meteo = donnees_meteo.fetch()
+print("⏳ Interrogation des serveurs climatiques (par année)...")
 
-# 3. NETTOYAGE ET PRÉPARATION
+# 2. TÉLÉCHARGEMENT SÉCURISÉ (Année par année)
+for annee in annees:
+    print(f"   -> Récupération de l'année {annee}...")
+    date_debut = datetime(annee, 1, 1)
+    date_fin = datetime(annee, 12, 31, 23, 59)
+    
+    # On interroge directement la station, pas le point GPS
+    donnees_meteo = hourly(station_id, date_debut, date_fin)
+    df_annee = donnees_meteo.fetch()
+    
+    # Sécurité : On vérifie que le serveur a bien répondu
+    if df_annee is not None and not df_annee.empty:
+        liste_df.append(df_annee)
+    else:
+        print(f"   ⚠️  Attention : Données manquantes pour {annee}.")
+
+# 3. ASSEMBLAGE ET NETTOYAGE
+print("\n🔗 Fusion de toutes les années...")
+df_meteo = pd.concat(liste_df)
+
 print("🧹 Nettoyage des données...")
-
-# Meteostat met la date/heure en index, on la transforme en vraie colonne
+# Meteostat place la date en index, on la transforme en colonne classique
 df_meteo = df_meteo.reset_index()
 
-# On ne garde que les colonnes qui nous intéressent vraiment
+# On ne garde que les colonnes utiles (Heure, Température, Pluie, Vent)
 df_meteo_propre = df_meteo[['time', 'temp', 'prcp', 'wspd']].copy()
 
-# On sépare la date et l'heure dans deux colonnes distinctes
+# Extraction de la date (AAAA-MM-JJ) et de l'heure (0 à 23)
 df_meteo_propre['date_meteo'] = df_meteo_propre['time'].dt.date
 df_meteo_propre['heure_meteo'] = df_meteo_propre['time'].dt.hour
 
-# Remplacer les éventuelles valeurs manquantes
+# Traitement des valeurs manquantes (Remplacement par 0 ou propagation de la dernière température)
 df_meteo_propre['prcp'] = df_meteo_propre['prcp'].fillna(0.0)
 df_meteo_propre['wspd'] = df_meteo_propre['wspd'].fillna(0.0)
-# Pour la température, on propage la dernière valeur connue s'il y a un trou
 df_meteo_propre['temp'] = df_meteo_propre['temp'].ffill()
 
 # 4. SAUVEGARDE EN PARQUET
@@ -50,4 +58,4 @@ fichier_sortie = f"{dossier_final}/historique_nyc.parquet"
 print(f"💾 Sauvegarde de {len(df_meteo_propre):,} heures de météo...")
 df_meteo_propre.to_parquet(fichier_sortie, index=False)
 
-print(f"✅ TERMINÉ ! Les données sont sécurisées dans : {fichier_sortie}")
+print(f"✅ TERMINÉ ! Les données horaires sont sécurisées dans : {fichier_sortie}")
