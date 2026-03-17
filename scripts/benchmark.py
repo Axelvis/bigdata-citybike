@@ -3,93 +3,123 @@ import zipfile
 import os
 import shutil
 import time
+import pandas as pd
+import matplotlib.pyplot as plt
 from pyspark.sql import SparkSession
 
 # ---------------------------------------------------------
 # 0. INITIALISATION DE SPARK
 # ---------------------------------------------------------
-print("Demarrage de la session PySpark pour le Benchmark...")
+print("🚀 Demarrage de la session PySpark pour le Benchmark Scalable...")
 spark = SparkSession.builder \
-    .appName("CitiBike_Benchmark") \
+    .appName("CitiBike_Scalability_Benchmark") \
     .getOrCreate()
 
 # ---------------------------------------------------------
-# 1. PREPARATION DES DONNEES DE TEST (1 SEUL MOIS)
+# 1. CONFIGURATION
 # ---------------------------------------------------------
 dossier_csv = 'data/benchmark_csv'
 dossier_parquet = 'data/benchmark_parquet'
-fichier_test_s3 = 'tripdata/202401-citibike-tripdata.zip'
 chemin_zip_local = 'data/benchmark_temp.zip'
 
-# Nettoyage initial
+# On va tester sur le premier trimestre 2024 (ajout progressif)
+fichiers_s3_a_tester = [
+    'tripdata/202401-citibike-tripdata.zip',
+    'tripdata/202402-citibike-tripdata.zip',
+    'tripdata/202403-citibike-tripdata.zip'
+    # Vous pouvez en ajouter plus, mais attention au temps d'exécution total !
+]
+
+# Nettoyage initial strict
 for d in [dossier_csv, dossier_parquet]:
     if os.path.exists(d):
         shutil.rmtree(d)
     os.makedirs(d, exist_ok=True)
 
-print("Telechargement d'un mois de donnees (Janvier 2024) pour le test...")
 fs = s3fs.S3FileSystem(anon=True)
-fs.get(fichier_test_s3, chemin_zip_local)
-
-print("Decompression en CSV...")
-with zipfile.ZipFile(chemin_zip_local, 'r') as z:
-    for nom in z.namelist():
-        if nom.endswith('.csv') and '__MACOSX' not in nom:
-            z.extract(nom, dossier_csv)
-os.remove(chemin_zip_local)
-
-print("Creation de la copie exacte en format Parquet...")
-# On lit le CSV et on l'ecrit en Parquet pour avoir une base de comparaison stricte
-df_csv_prep = spark.read.csv(dossier_csv, header=True, inferSchema=True)
-df_csv_prep.write.mode("overwrite").parquet(dossier_parquet)
+resultats_benchmark = []
 
 # ---------------------------------------------------------
-# 2. LE BENCHMARK
+# 2. BOUCLE D'ACCUMULATION ET BENCHMARK
 # ---------------------------------------------------------
-print("\n" + "="*50)
-print("DEBUT DU BENCHMARK ANALYTIQUE")
-print("Requete : Compter le nombre de trajets par type d'utilisateur")
-print("="*50)
+print("\n" + "="*60)
+print("DEBUT DU BENCHMARK DE SCALABILITE")
+print("="*60)
 
-# On force Spark a vider son cache pour que le test soit juste
-spark.catalog.clearCache()
-
-# Test 1 : Lecture depuis le CSV
-print("\n[1] Lancement du traitement sur le format CSV...")
-df_csv = spark.read.csv(dossier_csv, header=True, inferSchema=True)
-
-start_time_csv = time.time()
-# L'action collect() declenche le calcul
-resultat_csv = df_csv.groupBy("member_casual").count().collect()
-duree_csv = time.time() - start_time_csv
-
-print(f"Temps d'execution CSV : {duree_csv:.2f} secondes")
-
-# On vide le cache a nouveau
-spark.catalog.clearCache()
-
-# Test 2 : Lecture depuis le Parquet
-print("\n[2] Lancement du traitement sur le format Parquet...")
-df_parquet = spark.read.parquet(dossier_parquet)
-
-start_time_parquet = time.time()
-resultat_parquet = df_parquet.groupBy("member_casual").count().collect()
-duree_parquet = time.time() - start_time_parquet
-
-print(f"Temps d'execution Parquet : {duree_parquet:.2f} secondes")
+for mois_index, fichier_s3 in enumerate(fichiers_s3_a_tester, start=1):
+    print(f"\n--- ETAPE {mois_index} : Test avec {mois_index} mois de donnees cumulées ---")
+    
+    # 2.1 Téléchargement et ajout des nouveaux CSV
+    print(f"⬇️ Telechargement de {fichier_s3}...")
+    fs.get(fichier_s3, chemin_zip_local)
+    
+    print("📦 Decompression (accumulation avec les mois precedents)...")
+    with zipfile.ZipFile(chemin_zip_local, 'r') as z:
+        for nom in z.namelist():
+            if nom.endswith('.csv') and '__MACOSX' not in nom:
+                z.extract(nom, dossier_csv)
+    os.remove(chemin_zip_local)
+    
+    # 2.2 Création du Parquet équivalent
+    print("🔄 Creation de la copie exacte en format Parquet...")
+    df_csv_prep = spark.read.csv(dossier_csv, header=True, inferSchema=True)
+    df_csv_prep.write.mode("overwrite").parquet(dossier_parquet)
+    
+    # 2.3 BENCHMARK CSV
+    spark.catalog.clearCache()
+    print("⏱️  Mesure du temps CSV...")
+    df_csv = spark.read.csv(dossier_csv, header=True, inferSchema=True)
+    start_csv = time.time()
+    df_csv.groupBy("member_casual").count().collect()
+    temps_csv = time.time() - start_csv
+    
+    # 2.4 BENCHMARK PARQUET
+    spark.catalog.clearCache()
+    print("⏱️  Mesure du temps Parquet...")
+    df_parquet = spark.read.parquet(dossier_parquet)
+    start_parquet = time.time()
+    df_parquet.groupBy("member_casual").count().collect()
+    temps_parquet = time.time() - start_parquet
+    
+    print(f"✅ Resultat Étape {mois_index} | CSV : {temps_csv:.2f}s | Parquet : {temps_parquet:.2f}s")
+    
+    # Sauvegarde des résultats
+    resultats_benchmark.append({
+        "Mois_Cumules": mois_index,
+        "Temps_CSV_secondes": temps_csv,
+        "Temps_Parquet_secondes": temps_parquet
+    })
 
 # ---------------------------------------------------------
-# 3. RESULTATS ET NETTOYAGE
+# 3. VISUALISATION DES RESULTATS
 # ---------------------------------------------------------
-print("\n" + "="*50)
-print("CONCLUSION DU BENCHMARK")
-print("="*50)
-if duree_parquet > 0:
-    acceleration = duree_csv / duree_parquet
-    print(f"Le format Parquet a ete {acceleration:.1f} fois plus rapide que le CSV !")
+print("\n" + "="*60)
+print("GENERATION DES COURBES DE PERFORMANCE")
+print("="*60)
 
-print("\nNettoyage des fichiers de test...")
+# Transformation en DataFrame Pandas pour le graphique
+df_results = pd.DataFrame(resultats_benchmark)
+
+plt.figure(figsize=(10, 6))
+plt.plot(df_results["Mois_Cumules"], df_results["Temps_CSV_secondes"], marker='o', color='red', linewidth=2, label='Format CSV')
+plt.plot(df_results["Mois_Cumules"], df_results["Temps_Parquet_secondes"], marker='s', color='green', linewidth=2, label='Format Parquet')
+
+plt.title("Évolution du temps de calcul selon le volume de données", fontsize=14)
+plt.xlabel("Volume de données (Nombre de mois cumulés)", fontsize=12)
+plt.ylabel("Temps d'exécution (en secondes)", fontsize=12)
+plt.xticks(df_results["Mois_Cumules"])
+plt.legend(fontsize=12)
+plt.grid(True, linestyle='--', alpha=0.7)
+
+fichier_graphique = "data/benchmark_scalabilite.png"
+plt.savefig(fichier_graphique)
+print(f"📊 Graphique généré et sauvegardé sous : {fichier_graphique}")
+plt.show()
+
+# Nettoyage final
+print("\nNettoyage des fichiers temporaires massifs...")
 shutil.rmtree(dossier_csv)
 shutil.rmtree(dossier_parquet)
 
 spark.stop()
+print("🎉 Benchmark terminé !")
