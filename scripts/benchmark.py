@@ -16,10 +16,10 @@ spark = SparkSession.builder \
 # ---------------------------------------------------------
 # 1. PREPARATION DES DONNEES DE TEST (1 SEUL MOIS)
 # ---------------------------------------------------------
-dossier_csv = '../data/benchmark_csv'
-dossier_parquet = '../data/benchmark_parquet'
+dossier_csv = 'data/benchmark_csv'
+dossier_parquet = 'data/benchmark_parquet'
 fichier_test_s3 = 'tripdata/202401-citibike-tripdata.zip'
-chemin_zip_local = '../data/benchmark_temp.zip'
+chemin_zip_local = 'data/benchmark_temp.zip'
 
 # Nettoyage initial
 for d in [dossier_csv, dossier_parquet]:
