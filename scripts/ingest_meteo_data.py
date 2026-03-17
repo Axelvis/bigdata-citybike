@@ -38,35 +38,31 @@ print("-" * 50)
 # 2. LA BOUCLE GLOBALE (Pipeline)
 # ---------------------------------------------------------
 for annee in annees:
-    # Chemin exact du fichier CSV sur le bucket S3 de la NOAA
     fichier_s3 = f"noaa-gsod-pds/{annee}/{station_id}.csv"
     chemin_local = os.path.join(dossier_temp, f"meteo_nyc_{annee}.csv")
     
-    # Vérification que la donnée existe pour cette année sur le serveur
     if fs.exists(fichier_s3):
         print(f"[{annee}] ⬇️ Téléchargement des relevés météo...")
         fs.get(fichier_s3, chemin_local)
         
         print(f"[{annee}] ⚡ Traitement PySpark...")
-        # Lecture du CSV
+        # Spark lit spécifiquement ce fichier CSV local
         df_spark = spark.read.csv(chemin_local, header=True, inferSchema=True)
         
-        # ASTUCE DE NETTOYAGE : Les données NOAA ont souvent des espaces superflus 
-        # dans les noms de colonnes (ex: " TEMP" au lieu de "TEMP"). On nettoie ça à la volée.
+        # Nettoyage des espaces cachés dans les en-têtes de colonnes de la NOAA
         colonnes_propres = [col.strip() for col in df_spark.columns]
         df_spark = df_spark.toDF(*colonnes_propres)
         
-        # Ajout à la base Parquet
+        # Ajout direct en Parquet
         df_spark.write.mode("append").parquet(dossier_final)
         
-        # Nettoyage du fichier CSV local pour l'année en cours
         os.remove(chemin_local)
         
         print(f"✅ Année {annee} sécurisée en Parquet !\n")
     else:
         print(f"⚠️ Aucune donnée trouvée pour l'année {annee} à Central Park.\n")
 
-# Nettoyage final du dossier temporaire
+# Nettoyage final
 shutil.rmtree(dossier_temp)
 
 print("🎉 PIPELINE MÉTÉO TERMINÉ ! Vos données climatiques sont prêtes.")
