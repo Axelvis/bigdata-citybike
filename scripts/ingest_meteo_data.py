@@ -1,68 +1,54 @@
-import s3fs
+import pandas as pd
+from datetime import datetime
+from meteostat import Point, Hourly
 import os
-import shutil
-from pyspark.sql import SparkSession
 
-# ---------------------------------------------------------
-# 0. INITIALISATION DE SPARK
-# ---------------------------------------------------------
-print("🚀 Démarrage de la session PySpark pour la Météo...")
-spark = SparkSession.builder \
-    .appName("Meteo_Pipeline_NYC") \
-    .config("spark.sql.execution.arrow.pyspark.enabled", "true") \
-    .getOrCreate()
-print("✅ Session PySpark prête !")
-print("-" * 50)
+print("🌤️  Démarrage du téléchargement de la météo horaire...")
 
-# ---------------------------------------------------------
-# 1. CONFIGURATION DES DOSSIERS ET PARAMÈTRES
-# ---------------------------------------------------------
-dossier_temp = 'data/temp_meteo'
-dossier_final = 'data/meteo_db'
+# 1. PARAMÉTRAGES
+# Coordonnées géographiques de Central Park, New York
+ny_central_park = Point(40.7831, -73.9712)
 
-if os.path.exists(dossier_temp):
-    shutil.rmtree(dossier_temp)
-os.makedirs(dossier_temp, exist_ok=True)
+# Période globale du projet (De l'ouverture de Citi Bike à fin 2024)
+date_debut = datetime(2013, 1, 1)
+date_fin = datetime(2024, 12, 31, 23, 59)
+
+# 2. TÉLÉCHARGEMENT DES DONNÉES
+print(f"⏳ Interrogation des serveurs climatiques de {date_debut.year} à {date_fin.year}...")
+# On récupère les données horaires
+donnees_meteo = Hourly(ny_central_park, date_debut, date_fin)
+df_meteo = donnees_meteo.fetch()
+
+# 3. NETTOYAGE ET PRÉPARATION
+print("🧹 Nettoyage des données...")
+
+# Meteostat met la date/heure en index, on la transforme en vraie colonne
+df_meteo = df_meteo.reset_index()
+
+# On ne garde que les colonnes qui nous intéressent vraiment
+# time: Date et Heure
+# temp: Température en °Celsius !
+# prcp: Précipitations en millimètres
+# wspd: Vitesse du vent en km/h
+df_meteo_propre = df_meteo[['time', 'temp', 'prcp', 'wspd']].copy()
+
+# On sépare la date et l'heure dans deux colonnes distinctes pour faciliter 
+# la future jointure avec les trajets de vélos
+df_meteo_propre['date_meteo'] = df_meteo_propre['time'].dt.date
+df_meteo_propre['heure_meteo'] = df_meteo_propre['time'].dt.hour
+
+# Remplacer les éventuelles valeurs manquantes (NaN) par des zéros pour la pluie et le vent
+df_meteo_propre['prcp'] = df_meteo_propre['prcp'].fillna(0.0)
+df_meteo_propre['wspd'] = df_meteo_propre['wspd'].fillna(0.0)
+# Pour la température, on propage la température de l'heure précédente s'il y a un trou
+df_meteo_propre['temp'] = df_meteo_propre['temp'].ffill()
+
+# 4. SAUVEGARDE EN PARQUET
+dossier_final = "data/meteo_horaire_db"
 os.makedirs(dossier_final, exist_ok=True)
+fichier_sortie = f"{dossier_final}/historique_nyc.parquet"
 
-# Identifiants NOAA pour la station de Central Park, NY
-station_id = "72505394728"
-annees = range(2013, 2025)  # De 2013 à 2024 inclus
+print(f"💾 Sauvegarde de {len(df_meteo_propre):,} heures de météo...")
+df_meteo_propre.to_parquet(fichier_sortie, index=False)
 
-fs = s3fs.S3FileSystem(anon=True)
-
-print(f"Total d'années à traiter : {len(annees)} (de {annees[0]} à {annees[-1]})")
-print("-" * 50)
-
-# ---------------------------------------------------------
-# 2. LA BOUCLE GLOBALE (Pipeline)
-# ---------------------------------------------------------
-for annee in annees:
-    fichier_s3 = f"noaa-gsod-pds/{annee}/{station_id}.csv"
-    chemin_local = os.path.join(dossier_temp, f"meteo_nyc_{annee}.csv")
-    
-    if fs.exists(fichier_s3):
-        print(f"[{annee}] ⬇️ Téléchargement des relevés météo...")
-        fs.get(fichier_s3, chemin_local)
-        
-        print(f"[{annee}] ⚡ Traitement PySpark...")
-        # Spark lit spécifiquement ce fichier CSV local
-        df_spark = spark.read.csv(chemin_local, header=True, inferSchema=True)
-        
-        # Nettoyage des espaces cachés dans les en-têtes de colonnes de la NOAA
-        colonnes_propres = [col.strip() for col in df_spark.columns]
-        df_spark = df_spark.toDF(*colonnes_propres)
-        
-        # Ajout direct en Parquet
-        df_spark.write.mode("append").parquet(dossier_final)
-        
-        os.remove(chemin_local)
-        
-        print(f"✅ Année {annee} sécurisée en Parquet !\n")
-    else:
-        print(f"⚠️ Aucune donnée trouvée pour l'année {annee} à Central Park.\n")
-
-# Nettoyage final
-shutil.rmtree(dossier_temp)
-
-print("🎉 PIPELINE MÉTÉO TERMINÉ ! Vos données climatiques sont prêtes.")
+print(f"✅ TERMINÉ ! Les données sont sécurisées dans : {fichier_sortie}")
