@@ -93,9 +93,7 @@ if __name__ == '__main__':
     )
 
     # C. L'algorithme d'IA (Random Forest est excellent pour ce type de données)
-    # Il tourne de manière distribuée sur tous les cœurs
-    rf = RandomForestRegressor(featuresCol="features", labelCol="flux_net", numTrees=50, maxDepth=10)
-
+    rf = RandomForestRegressor(featuresCol="features", labelCol="flux_net", numTrees=50, maxDepth=10, maxBins=64)
     # On assemble le pipeline complet
     pipeline = Pipeline(stages=[indexer, assembleur, rf])
 
