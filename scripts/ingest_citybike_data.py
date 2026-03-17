@@ -19,9 +19,9 @@ print("-" * 50)
 # 1. CONFIGURATION DES DOSSIERS
 # ---------------------------------------------------------
 # CRITIQUE : On sépare physiquement le ZIP des CSV pour ne pas perturber Spark
-dossier_zip = '../data/temp_zip'       # Accueil du fichier téléchargé
-dossier_csv = '../data/temp_csv'       # Accueil des fichiers décompressés
-dossier_final = '../data/citibike_db'  # Base de données finale
+dossier_zip = 'data/temp_zip'       # Accueil du fichier téléchargé
+dossier_csv = 'data/temp_csv'       # Accueil des fichiers décompressés
+dossier_final = 'data/citibike_db'  # Base de données finale
 
 # Nettoyage et création des dossiers
 for d in [dossier_zip, dossier_csv]:
