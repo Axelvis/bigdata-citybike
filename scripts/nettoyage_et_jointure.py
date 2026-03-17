@@ -1,10 +1,10 @@
 import os
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, to_date, when
+from pyspark.sql.functions import col, to_date, hour
 
 print("🚀 Démarrage de la session PySpark...")
 spark = SparkSession.builder \
-    .appName("CitiBike_Meteo_Join") \
+    .appName("CitiBike_Meteo_Horaire_Join") \
     .config("spark.sql.execution.arrow.pyspark.enabled", "true") \
     .getOrCreate()
 
@@ -13,57 +13,63 @@ spark = SparkSession.builder \
 # ---------------------------------------------------------
 print("📂 Chargement des bases de données Parquet...")
 df_velos = spark.read.parquet("data/citibike_db")
-df_meteo = spark.read.parquet("data/meteo_db")
+
+# Attention : On pointe désormais vers le nouveau dossier horaire !
+df_meteo = spark.read.parquet("data/meteo_horaire_db")
 
 # ---------------------------------------------------------
-# 2. NETTOYAGE DES VÉLOS
+# 2. PRÉPARATION DES VÉLOS (Date + Heure)
 # ---------------------------------------------------------
-print("🧹 Nettoyage des données vélos...")
+print("🧹 Extraction des marqueurs temporels des trajets...")
 
-# Identification de la colonne de départ (Citi Bike a changé le nom de "starttime" à "started_at" au fil des ans)
 col_debut = "starttime" if "starttime" in df_velos.columns else "started_at"
 
-# Extraction de la date pure (AAAA-MM-JJ) pour pouvoir faire la correspondance avec la météo
-df_velos_clean = df_velos.withColumn("date_trajet", to_date(col(col_debut)))
+# NOUVEAUTÉ : On extrait la date ET l'heure (de 0 à 23)
+df_velos_clean = df_velos.withColumn("date_trajet", to_date(col(col_debut))) \
+                         .withColumn("heure_trajet", hour(col(col_debut)))
 
-# Suppression des "faux" trajets (moins de 60 secondes = souvent un vélo défectueux reposé)
+# Filtre de propreté sur les trajets fantômes
 if "tripduration" in df_velos_clean.columns:
     df_velos_clean = df_velos_clean.filter(col("tripduration") > 60)
 
 # ---------------------------------------------------------
-# 3. NETTOYAGE DE LA MÉTÉO
+# 3. PRÉPARATION DE LA MÉTÉO
 # ---------------------------------------------------------
-print("🌦️ Nettoyage des données météorologiques...")
+print("🌦️ Formatage des données météorologiques...")
 
-# La NOAA utilise 9999.9 pour les températures manquantes et 99.99 pour la pluie manquante.
-# On remplace ces valeurs par du vide (Null) ou par 0 pour la pluie.
+# Les données ont déjà été nettoyées par Pandas, on renomme juste 
+# les colonnes pour être très clair sur les unités (Celsius, mm, km/h)
 df_meteo_clean = df_meteo.select(
-    to_date(col("DATE")).alias("date_meteo"),
-    when(col("TEMP") == 9999.9, None).otherwise(col("TEMP")).alias("temperature_f"),
-    when(col("PRCP") == 99.99, 0.0).otherwise(col("PRCP")).alias("precipitations_pouces")
+    col("date_meteo"),
+    col("heure_meteo"),
+    col("temp").alias("temperature_c"),
+    col("prcp").alias("precipitations_mm"),
+    col("wspd").alias("vent_kmh")
 )
 
 # ---------------------------------------------------------
-# 4. JOINTURE (MERGE)
+# 4. JOINTURE ULTRA-PRÉCISE (MERGE)
 # ---------------------------------------------------------
-print("🔗 Croisement des trajets avec la météo du jour...")
+print("🔗 Croisement des trajets avec la météo HORAIRE...")
 
-# Jointure interne (Inner Join) sur la date
+# NOUVEAUTÉ : Jointure sur 2 conditions (Date == Date ET Heure == Heure)
 df_final = df_velos_clean.join(
     df_meteo_clean, 
-    df_velos_clean.date_trajet == df_meteo_clean.date_meteo, 
+    (df_velos_clean.date_trajet == df_meteo_clean.date_meteo) & 
+    (df_velos_clean.heure_trajet == df_meteo_clean.heure_meteo), 
     "inner"
 )
 
-# On retire la colonne date en double pour garder un tableau propre
-df_final = df_final.drop("date_meteo")
+# On retire les colonnes météo en double pour garder un tableau propre
+df_final = df_final.drop("date_meteo", "heure_meteo")
 
 # ---------------------------------------------------------
 # 5. SAUVEGARDE FINALE
 # ---------------------------------------------------------
-dossier_sortie = "data/dataset_final_modelisation"
+# On change le nom du dossier de sortie pour ne pas écraser votre ancienne base quotidienne
+dossier_sortie = "data/dataset_horaire_final"
 print(f"💾 Sauvegarde du jeu de données unifié dans {dossier_sortie}...")
 
 df_final.write.mode("overwrite").parquet(dossier_sortie)
 
-print("🎉 OPÉRATION TERMINÉE ! Le jeu de données est prêt pour l'exploration et le Machine Learning.")
+print("🎉 OPÉRATION TERMINÉE ! Le jeu de données Haute Précision est prêt.")
