@@ -8,7 +8,7 @@ print("🌤️  Démarrage du téléchargement de la météo horaire...")
 # 1. PARAMÉTRAGES
 # Identifiant officiel de la station de Central Park (New York)
 station_id = '72505'
-annees = range(2013, 2025) # De 2013 à 2024 inclus
+annees = range(2017, 2026) # De 2013 à 2024 inclus
 
 liste_df = []
 
