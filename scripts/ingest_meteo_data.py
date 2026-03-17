@@ -1,6 +1,6 @@
 import pandas as pd
 from datetime import datetime
-from meteostat import Point, Hourly
+from meteostat import Point, hourly
 import os
 
 print("🌤️  Démarrage du téléchargement de la météo horaire...")
@@ -16,7 +16,7 @@ date_fin = datetime(2024, 12, 31, 23, 59)
 # 2. TÉLÉCHARGEMENT DES DONNÉES
 print(f"⏳ Interrogation des serveurs climatiques de {date_debut.year} à {date_fin.year}...")
 # On récupère les données horaires
-donnees_meteo = Hourly(ny_central_park, date_debut, date_fin)
+donnees_meteo = hourly(ny_central_park, date_debut, date_fin)
 df_meteo = donnees_meteo.fetch()
 
 # 3. NETTOYAGE ET PRÉPARATION
