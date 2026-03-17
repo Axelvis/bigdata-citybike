@@ -15,7 +15,8 @@ print("📂 Chargement des bases de données Parquet...")
 df_velos = spark.read.parquet("data/citibike_db")
 
 # Attention : On pointe désormais vers le nouveau dossier horaire !
-df_meteo = spark.read.parquet("data/meteo_horaire_db")
+df_meteo = spark.read.parquet("data/meteo_horaire_multi_db")
+
 
 # ---------------------------------------------------------
 # 2. PRÉPARATION DES VÉLOS (Date + Heure)
