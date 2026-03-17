@@ -12,8 +12,8 @@ spark = SparkSession.builder \
 # 1. CHARGEMENT DES DONNÉES
 # ---------------------------------------------------------
 print("📂 Chargement des bases de données Parquet...")
-df_velos = spark.read.parquet("../data/citibike_db")
-df_meteo = spark.read.parquet("../data/meteo_db")
+df_velos = spark.read.parquet("data/citibike_db")
+df_meteo = spark.read.parquet("data/meteo_db")
 
 # ---------------------------------------------------------
 # 2. NETTOYAGE DES VÉLOS
