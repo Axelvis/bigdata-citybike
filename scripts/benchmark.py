@@ -26,7 +26,12 @@ chemin_zip_local = 'data/benchmark_temp.zip'
 fichiers_s3_a_tester = [
     'tripdata/202401-citibike-tripdata.zip',
     'tripdata/202402-citibike-tripdata.zip',
-    'tripdata/202403-citibike-tripdata.zip'
+    'tripdata/202403-citibike-tripdata.zip',
+    'tripdata/202404-citibike-tripdata.zip',
+    'tripdata/202405-citibike-tripdata.zip',
+    'tripdata/202406-citibike-tripdata.zip',
+    'tripdata/202407-citibike-tripdata.zip',
+    'tripdata/202408-citibike-tripdata.zip'
     # Vous pouvez en ajouter plus, mais attention au temps d'exécution total !
 ]
 
