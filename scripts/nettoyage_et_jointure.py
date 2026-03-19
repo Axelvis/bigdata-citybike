@@ -1,6 +1,8 @@
 import os
+import glob
+from functools import reduce
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, to_date, hour
+from pyspark.sql.functions import col, to_date, hour, coalesce, unix_timestamp
 
 print("🚀 Démarrage de la session PySpark...")
 spark = SparkSession.builder \
@@ -9,37 +11,63 @@ spark = SparkSession.builder \
     .getOrCreate()
 
 # ---------------------------------------------------------
-# 1. CHARGEMENT DES DONNÉES
+# 1. LECTURE INTELLIGENTE ET FUSION (LE VRAI BLINDAGE)
 # ---------------------------------------------------------
-print("📂 Chargement des bases de données Parquet...")
-df_velos = spark.read.parquet("data/citibike_db")
+print("📂 Analyse et harmonisation des fichiers Parquet (anti-corruption)...")
 
-# Attention : On pointe désormais vers le nouveau dossier horaire !
+# On liste tous les fichiers parquet physiquement présents dans ton dossier
+fichiers_parquet = glob.glob("data/citibike_db/*.parquet")
+
+dfs = []
+for fichier in fichiers_parquet:
+    # Spark lit le fichier avec son VRAI type interne (INT, TIMESTAMP, etc.)
+    df_temp = spark.read.parquet(fichier)
+    
+    # On convertit tout de suite proprement en texte AVANT de les mélanger
+    for c in df_temp.columns:
+        df_temp = df_temp.withColumn(c, col(c).cast("string"))
+        
+    dfs.append(df_temp)
+
+# Fusion globale en autorisant les colonnes manquantes entre les anciennes et nouvelles années
+print("🔄 Empilage des historiques en cours (ça peut prendre un instant)...")
+df_velos = reduce(lambda df1, df2: df1.unionByName(df2, allowMissingColumns=True), dfs)
+
+
+# ---------------------------------------------------------
+# 2. CHARGEMENT DE LA MÉTÉO
+# ---------------------------------------------------------
 df_meteo = spark.read.parquet("data/meteo_horaire_multi_db")
 
 
 # ---------------------------------------------------------
-# 2. PRÉPARATION DES VÉLOS (Date + Heure)
+# 3. PRÉPARATION DES VÉLOS
 # ---------------------------------------------------------
-print("🧹 Extraction des marqueurs temporels des trajets...")
+print("🧹 Extraction et unification des marqueurs temporels...")
 
-col_debut = "starttime" if "starttime" in df_velos.columns else "started_at"
+# Maintenant qu'on a un beau texte formaté "2021-01-01 12:00:00", le cast en timestamp marchera !
+df_velos_clean = df_velos.withColumn("debut_unifie", coalesce(col("starttime"), col("started_at")).cast("timestamp")) \
+                         .withColumn("fin_unifie", coalesce(col("stoptime"), col("ended_at")).cast("timestamp"))
 
-# NOUVEAUTÉ : On extrait la date ET l'heure (de 0 à 23)
-df_velos_clean = df_velos.withColumn("date_trajet", to_date(col(col_debut))) \
-                         .withColumn("heure_trajet", hour(col(col_debut)))
+df_velos_clean = df_velos_clean.withColumn("date_trajet", to_date(col("debut_unifie"))) \
+                               .withColumn("heure_trajet", hour(col("debut_unifie")))
 
-# Filtre de propreté sur les trajets fantômes
-if "tripduration" in df_velos_clean.columns:
-    df_velos_clean = df_velos_clean.filter(col("tripduration") > 60)
+# Calcul de la durée du trajet en secondes
+df_velos_clean = df_velos_clean.withColumn("duree_secondes",
+    coalesce(
+        col("tripduration").cast("int"),
+        (unix_timestamp(col("fin_unifie")) - unix_timestamp(col("debut_unifie"))).cast("int")
+    )
+)
+
+# Filtre de propreté
+df_velos_clean = df_velos_clean.filter(col("duree_secondes") > 60)
+
 
 # ---------------------------------------------------------
-# 3. PRÉPARATION DE LA MÉTÉO
+# 4. PRÉPARATION DE LA MÉTÉO
 # ---------------------------------------------------------
 print("🌦️ Formatage des données météorologiques...")
-
-# Les données ont déjà été nettoyées par Pandas, on renomme juste 
-# les colonnes pour être très clair sur les unités (Celsius, mm, km/h)
 df_meteo_clean = df_meteo.select(
     col("date_meteo"),
     col("heure_meteo"),
@@ -48,12 +76,11 @@ df_meteo_clean = df_meteo.select(
     col("wspd").alias("vent_kmh")
 )
 
+
 # ---------------------------------------------------------
-# 4. JOINTURE ULTRA-PRÉCISE (MERGE)
+# 5. JOINTURE
 # ---------------------------------------------------------
 print("🔗 Croisement des trajets avec la météo HORAIRE...")
-
-# NOUVEAUTÉ : Jointure sur 2 conditions (Date == Date ET Heure == Heure)
 df_final = df_velos_clean.join(
     df_meteo_clean, 
     (df_velos_clean.date_trajet == df_meteo_clean.date_meteo) & 
@@ -61,13 +88,13 @@ df_final = df_velos_clean.join(
     "inner"
 )
 
-# On retire les colonnes météo en double pour garder un tableau propre
+# Nettoyage des colonnes en double
 df_final = df_final.drop("date_meteo", "heure_meteo")
 
+
 # ---------------------------------------------------------
-# 5. SAUVEGARDE FINALE
+# 6. SAUVEGARDE FINALE
 # ---------------------------------------------------------
-# On change le nom du dossier de sortie pour ne pas écraser votre ancienne base quotidienne
 dossier_sortie = "data/dataset_horaire_final"
 print(f"💾 Sauvegarde du jeu de données unifié dans {dossier_sortie}...")
 
